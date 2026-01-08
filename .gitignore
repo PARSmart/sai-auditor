@@ -18,7 +18,7 @@
 /out/
 
 # production
-/build
+
 
 # misc
 .DS_Store
@@ -31,11 +31,23 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.*
+!.env.example
+
+# google credentials
+parsmart-*.json
+*.pem
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+# corrupted
+nul
+
+
+
+.vercel
