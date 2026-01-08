@@ -1,0 +1,37 @@
+/* ========================================
+   FASE 4: Animación de Línea Láser de Escaneo
+   ======================================== */
+
+@keyframes laserScan {
+    0% {
+        top: 0%;
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.8), 0 0 40px rgba(255, 0, 0, 0.4);
+    }
+
+    100% {
+        top: 100%;
+        opacity: 0.3;
+    }
+}
+
+.laser-line {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: linear-gradient(90deg,
+            transparent,
+            #ff0000 20%,
+            #ff0000 80%,
+            transparent);
+    animation: laserScan 2s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 100;
+    filter: blur(0.5px);
+    /* Efecto de "energía" */
+}
