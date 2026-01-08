@@ -298,12 +298,11 @@ export default function CapturePage() {
                             </div>
 
                             {!isManual ? (
-                                <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
+                                <div className="bg-black rounded-lg overflow-visible relative min-h-[300px] flex flex-col">
                                     {scannerActive && <Scanner
                                         onScanSuccess={(txt) => validateSerial(txt)}
                                         onScanError={() => { }}
                                     />}
-                                    <p className="absolute bottom-2 left-0 right-0 text-center text-[10px] text-white/50">Apunte al código de barras</p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">

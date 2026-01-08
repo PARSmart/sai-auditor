@@ -152,8 +152,7 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanSuccess, onScanError, on
     return (
         <div className="flex flex-col items-center space-y-4 w-full">
             {/* Area de Escaneo y Overlay */}
-            {/* Usamos un wrapper "relative" para apilar el overlay SOBRE el video, NO ADENTRO */}
-            <div className="w-full max-w-[400px] overflow-hidden rounded-lg bg-black border border-white/20 aspect-square relative flex items-center justify-center">
+            <div className="w-full max-w-[400px] overflow-hidden rounded-xl bg-black border border-white/20 aspect-square relative flex items-center justify-center shadow-2xl">
 
                 {/* Contenedor EXCLUSIVO para html5-qrcode. React nunca debe tocar sus hijos. */}
                 <div id={qrcodeRegionId} className="w-full h-full" />
@@ -173,15 +172,14 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanSuccess, onScanError, on
                 )}
             </div>
 
-            {/* Controles */}
-            <div className="flex gap-2 w-full max-w-md">
+            <div className="flex flex-col gap-3 w-full max-w-[400px]">
                 {!isScanning ? (
-                    <Button onClick={startScanning} className="w-full" disabled={!!permissionError}>
-                        <Camera className="mr-2" size={18} /> Iniciar Escáner
+                    <Button onClick={startScanning} className="w-full h-12 text-base font-semibold" disabled={!!permissionError}>
+                        <Camera className="mr-2" size={20} /> Iniciar Escáner
                     </Button>
                 ) : (
-                    <Button onClick={stopScanning} variant="destructive" className="w-full">
-                        <StopCircle className="mr-2" size={18} /> Detener
+                    <Button onClick={stopScanning} variant="destructive" className="w-full h-12 text-base font-semibold">
+                        <StopCircle className="mr-2" size={20} /> Detener Escaneo
                     </Button>
                 )}
             </div>
