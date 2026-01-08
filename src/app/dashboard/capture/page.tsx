@@ -70,7 +70,7 @@ export default function CapturePage() {
 
     // ESTADOS TEMPORALES (Dentro del Detalle)
     const [tempSerial, setTempSerial] = useState('')
-    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB', msg?: string } | null>(null)
+    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED', msg?: string } | null>(null)
     const [isManual, setIsManual] = useState(false)
     const [scannerActive, setScannerActive] = useState(true)
 
