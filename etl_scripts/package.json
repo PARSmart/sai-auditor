@@ -1,0 +1,20 @@
+{
+  "name": "auditor-equipos-empresa",
+  "version": "1.0.0",
+  "description": "**Regional**: Occidente (Jalisco y Colima)\r **Versión**: 1.0\r **Estado**: Diseño Completado ✅\r **Fecha**: 6 de Enero de 2026",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "@types/node": "^25.0.3",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
