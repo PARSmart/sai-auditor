@@ -16,27 +16,28 @@ interface ComponentConfig {
     label: string
     description?: string // Ej. "CPU + Monitor"
     icon?: string
+    validationKeywords?: string[] // Palabras clave para validar tipo (coincidencia parcial)
 }
 
 const EQUIPMENT_CONFIG: Record<string, ComponentConfig[]> = {
     laptop: [
-        { id: 'serie_monitor', label: 'Monitor Externo' },
-        { id: 'serie_laptop', label: 'Laptop (Etiqueta)', description: 'Parte inferior o bajo batería' },
-        { id: 'serie_docking', label: 'Docking Station' },
-        { id: 'serie_candado', label: 'Candado de Seguridad' },
-        { id: 'serie_mouse', label: 'Mouse' },
-        { id: 'serie_teclado', label: 'Teclado Externo' },
-        { id: 'serie_cargador', label: 'Cargador' }
+        { id: 'serie_monitor', label: 'Monitor Externo', validationKeywords: ['MONITOR', 'PANTALLA', 'DISPLAY'] },
+        { id: 'serie_laptop', label: 'Laptop (Etiqueta)', description: 'Parte inferior o bajo batería', validationKeywords: ['PORTATIL', 'LAPTOP', 'NOTEBOOK', 'DELL LATITUDE'] },
+        { id: 'serie_docking', label: 'Docking Station', validationKeywords: ['DOCKING', 'REPLICADOR', 'DOCK'] },
+        { id: 'serie_candado', label: 'Candado de Seguridad', validationKeywords: ['CANDADO', 'LOCK', 'SECURITY'] },
+        { id: 'serie_mouse', label: 'Mouse', validationKeywords: ['MOUSE', 'RATON'] },
+        { id: 'serie_teclado', label: 'Teclado Externo', validationKeywords: ['TECLADO', 'KEYBOARD'] },
+        { id: 'serie_cargador', label: 'Cargador', validationKeywords: ['CARGADOR', 'ADAPTADOR', 'AC ADAPTER'] }
     ],
     escritorio: [
-        { id: 'serie_monitor', label: 'Monitor Principal' },
-        { id: 'serie_pc', label: 'CPU / Gabinete' },
-        { id: 'serie_mouse', label: 'Mouse' },
-        { id: 'serie_teclado', label: 'Teclado' },
-        { id: 'serie_ups', label: 'UPS (No-Break)' }
+        { id: 'serie_monitor', label: 'Monitor Principal', validationKeywords: ['MONITOR', 'PANTALLA', 'DISPLAY'] },
+        { id: 'serie_pc', label: 'CPU / Gabinete', validationKeywords: ['CPU', 'GABINETE', 'OPTIPLEX', 'K6', 'Z2', 'DESKTOP', 'COMPUTADORA'] },
+        { id: 'serie_mouse', label: 'Mouse', validationKeywords: ['MOUSE', 'RATON'] },
+        { id: 'serie_teclado', label: 'Teclado', validationKeywords: ['TECLADO', 'KEYBOARD'] },
+        { id: 'serie_ups', label: 'UPS (No-Break)', validationKeywords: ['UPS', 'NO-BREAK', 'NO BREAK', 'REGULADOR'] }
     ],
     multifuncional: [
-        { id: 'completo', label: 'Multifuncional / Impresora', description: 'Vista general' }
+        { id: 'completo', label: 'Multifuncional / Impresora', description: 'Vista general', validationKeywords: ['MULTIFUNCIONAL', 'IMPRESORA', 'SCANNER', 'PRINTER'] }
     ]
 }
 
@@ -44,7 +45,7 @@ const EQUIPMENT_CONFIG: Record<string, ComponentConfig[]> = {
 // Almacena la evidencia individual
 interface ComponentEvidence {
     id: string // ID del componente (ej. 'serie_mouse')
-    status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED'
+    status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED' | 'WRONG_TYPE'
     serial: string // Serial capturado
     validationMsg?: string // Mensaje de validación (ej. "Encontrado: Dell Mouse")
     photoBlob?: Blob
@@ -70,7 +71,7 @@ export default function CapturePage() {
 
     // ESTADOS TEMPORALES (Dentro del Detalle)
     const [tempSerial, setTempSerial] = useState('')
-    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED', msg?: string } | null>(null)
+    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED' | 'WRONG_TYPE', msg?: string } | null>(null)
     const [isManual, setIsManual] = useState(false)
     const [scannerActive, setScannerActive] = useState(true)
 
@@ -99,10 +100,30 @@ export default function CapturePage() {
                 .single()
 
             if (data) {
-                setTempValidation({
-                    status: 'CAPTURED', // Provisional, espera foto
-                    msg: `${data.descripcion} (${data.marca})`
-                })
+                // VALIDACIÓN CRUZADA DE TIPO
+                const currentConfig = EQUIPMENT_CONFIG[tipoEquipo!].find(c => c.id === activeComponentId)
+                const descripcionBD = (data.tipo_equipo || '') + ' ' + (data.descripcion || '')
+                const descripcionUpper = descripcionBD.toUpperCase()
+
+                // Verificar si incluye alguna keyword esperada
+                const esTipoCorrecto = currentConfig?.validationKeywords?.some(keyword =>
+                    descripcionUpper.includes(keyword)
+                )
+
+                // Si no tiene keywords definidas, asumimos correcto (comportamiento fallback)
+                // O si encontró coincidencia
+                if (!currentConfig?.validationKeywords || esTipoCorrecto) {
+                    setTempValidation({
+                        status: 'CAPTURED', // Provisional, espera foto
+                        msg: `${data.descripcion} (${data.marca})`
+                    })
+                } else {
+                    // BLOQUEO: Tipo incorrecto detectado y serial SÍ existe en BD
+                    setTempValidation({
+                        status: 'WRONG_TYPE',
+                        msg: `El número de serie ${serialToValidate} No corresponde al dispositivo que quieres registrar (${currentConfig?.label}), Ya que dicho Número de serie corresponde a un "${data.tipo_equipo}" según la base de datos maestra. Presiona el botón de retornar y elige el correcto.`
+                    })
+                }
             } else {
                 setTempValidation({
                     status: 'NOT_FOUND_DB',
@@ -334,28 +355,56 @@ export default function CapturePage() {
                 ) : (
                     <div className="space-y-6 flex-1 flex flex-col">
                         {/* Resultado Validación */}
-                        <div className={`p-4 rounded-lg border ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
+                        {/* Resultado Validación */}
+                        <div className={`p-4 rounded-lg border ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                                tempValidation.status === 'WRONG_TYPE' ? 'bg-red-500/10 border-red-500/30' :
+                                    'bg-green-500/10 border-green-500/30'
+                            }`}>
                             <div className="flex items-center gap-2 mb-1">
-                                {tempValidation.status === 'NOT_FOUND_DB' ? <AlertCircle className="text-yellow-500" size={20} /> : <CheckCircle2 className="text-green-500" size={20} />}
-                                <span className={`font-bold ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' : 'text-green-500'}`}>
-                                    {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' : 'ENCONTRADO'}
+                                {tempValidation.status === 'NOT_FOUND_DB' && <AlertCircle className="text-yellow-500" size={20} />}
+                                {tempValidation.status === 'WRONG_TYPE' && <Ban className="text-red-500" size={20} />}
+                                {tempValidation.status === 'CAPTURED' && <CheckCircle2 className="text-green-500" size={20} />}
+
+                                <span className={`font-bold ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' :
+                                        tempValidation.status === 'WRONG_TYPE' ? 'text-red-500' :
+                                            'text-green-500'
+                                    }`}>
+                                    {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' :
+                                        tempValidation.status === 'WRONG_TYPE' ? 'TIPO INCORRECTO' : 'ENCONTRADO'}
                                 </span>
                             </div>
                             <p className="text-sm opacity-80">{tempValidation.msg}</p>
                             <p className="text-xs font-mono mt-2 bg-black/20 p-1 rounded w-fit">{tempSerial}</p>
+
+                            {/* Botón Retornar Específico para Error de Tipo */}
+                            {tempValidation.status === 'WRONG_TYPE' && (
+                                <Button
+                                    className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white"
+                                    onClick={() => {
+                                        setTempValidation(null)
+                                        setTempSerial('')
+                                        setIsManual(false)
+                                        setScannerActive(true)
+                                    }}
+                                >
+                                    <ArrowLeft className="mr-2" size={16} /> Retornar y corregir
+                                </Button>
+                            )}
                         </div>
 
-                        {/* Foto Evidencia */}
-                        <div className="flex-1">
-                            <CameraCapture
-                                label={`Foto del Serial (${config.label})`}
-                                onCapture={(src) => {
-                                    if (src) {
-                                        fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
-                                    }
-                                }}
-                            />
-                        </div>
+                        {/* Foto Evidencia (Ocultar si hay error de tipo bloqueante) */}
+                        {tempValidation.status !== 'WRONG_TYPE' && (
+                            <div className="flex-1">
+                                <CameraCapture
+                                    label={`Foto del Serial (${config.label})`}
+                                    onCapture={(src) => {
+                                        if (src) {
+                                            fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
