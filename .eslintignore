@@ -1,0 +1,5 @@
+etl_scripts/
+node_modules/
+.next/
+out/
+build/
