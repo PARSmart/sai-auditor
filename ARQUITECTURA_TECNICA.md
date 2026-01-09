@@ -1,9 +1,9 @@
 # Arquitectura Técnica del Sistema
 ## Auditor de Equipos - Alimentación para el Bienestar
 
-**Fecha**: 6 de Enero de 2026
-**Versión**: 1.0
-**Estado**: Diseño Aprobado
+**Fecha**: 8 de Enero de 2026
+**Versión**: 1.2
+**Estado**: Implementado Parcialmente (Fase 2)
 
 ---
 
@@ -18,7 +18,8 @@ El sistema sigue los siguientes principios fundamentales:
 3. **Mobile-First**: Optimizado para dispositivos móviles con pantallas pequeñas
 4. **Procesamiento Diferido**: IA procesa datos en lote, no en tiempo real
 5. **Defense in Depth**: Múltiples capas de validación (cliente, servidor, base de datos)
-6. **Offline-Capable** (Futuro): Capacidad de trabajo sin conexión
+6. **Validación Preventiva (Fail-Open)**: Bloqueo de errores obvios (tipo incorrecto) pero permisividad ante datos faltantes.
+7. **Offline-Capable** (Futuro): Capacidad de trabajo sin conexión
 
 ### 1.2 Diagrama de Arquitectura de Alto Nivel
 
@@ -446,11 +447,15 @@ export default async function handler(req, res) {
    ↓
 [Frontend] → Activa cámara trasera (html5-qrcode)
    │
-   ├─ Escaneo exitoso → Guarda serial en state
+   ├─ Escaneo exitoso → Query `inventario_maestro`
    │  ↓
-   │  Muestra: "✅ Serie detectada: D9HSR93"
-   │  ↓
-   │  Botón "Confirmar" → Avanza a captura de fotos
+   │  ├─ NO EXISTE EN BD → Warning "No registrado" (Permite continuar)
+   │  │
+   │  ├─ EXISTE EN BD:
+   │  │  ├─ Tipo coincidente (Keyword Match) → "✅ Encontrado: Dell Monitor"
+   │  │  └─ Tipo INCORRECTO → ⛔ BLOQUEO: "Serial corresponde a CPU"
+   │  │
+   │  Botón "Confirmar" (si no hay bloqueo) → Avanza a captura de fotos
    │
    └─ Escaneo falla → Botón "Etiqueta ilegible"
       ↓
@@ -787,7 +792,25 @@ async function crearCarpetasSiNoExiste(drive, path, rootFolderId) {
 
 **Justificación**:
 - ✅ Solo ~10-15% de equipos tienen etiquetas ilegibles (estimado)
-- ✅ No*   **Granularidad "Radiografía" (Hub & Spoke)**:
+- ✅ No bloquea al usuario en el sitio
+- ✅ Permite validación humana supervisada
+
+---
+
+### 5.4 ¿Por qué lógica "Fail-Open" en validación de seriales?
+
+**Análisis**:
+- El inventario maestro puede estar desactualizado (equipos nuevos, renta reciente).
+- Bloquear un serial "no encontrado" impediría registrar un activo real que la empresa tiene físicamente.
+
+**Decisión**: 
+- **Si serial NO está en BD**: Se deja pasar (Fail-Open) con advertencia.
+- **Si serial ESTÁ en BD pero tipo incorrecto**: Se bloquea (Fail-Close) para prevenir error humano.
+
+**Justificación**:
+- Prioriza la captura de la realidad física sobre la teórica.
+- Minimiza la frustración del usuario ante datos maestros incompletos.
+*   **Granularidad "Radiografía" (Hub & Spoke)**:
     *   **Dashboard**: El usuario ve el "Kit Completo" y selecciona qué capturar.
     *   **Serial por Componente**: Cada componente (Monitor, Mouse, etc.) requiere escanear/ingresar su serial individual.
     *   **Validación Individual**: Se valida cada serial contra la BD.

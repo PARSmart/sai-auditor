@@ -16,27 +16,28 @@ interface ComponentConfig {
     label: string
     description?: string // Ej. "CPU + Monitor"
     icon?: string
+    validationKeywords?: string[] // Palabras clave para validar tipo (coincidencia parcial)
 }
 
 const EQUIPMENT_CONFIG: Record<string, ComponentConfig[]> = {
     laptop: [
-        { id: 'serie_monitor', label: 'Monitor Externo' },
-        { id: 'serie_laptop', label: 'Laptop (Etiqueta)', description: 'Parte inferior o bajo batería' },
-        { id: 'serie_docking', label: 'Docking Station' },
-        { id: 'serie_candado', label: 'Candado de Seguridad' },
-        { id: 'serie_mouse', label: 'Mouse' },
-        { id: 'serie_teclado', label: 'Teclado Externo' },
-        { id: 'serie_cargador', label: 'Cargador' }
+        { id: 'serie_monitor', label: 'Monitor Externo', validationKeywords: ['MONITOR', 'PANTALLA', 'DISPLAY'] },
+        { id: 'serie_laptop', label: 'Laptop (Etiqueta)', description: 'Parte inferior o bajo batería', validationKeywords: ['PORTATIL', 'LAPTOP', 'NOTEBOOK', 'DELL LATITUDE'] },
+        { id: 'serie_docking', label: 'Docking Station', validationKeywords: ['DOCKING', 'REPLICADOR', 'DOCK'] },
+        { id: 'serie_candado', label: 'Candado de Seguridad', validationKeywords: ['CANDADO', 'LOCK', 'SECURITY'] },
+        { id: 'serie_mouse', label: 'Mouse', validationKeywords: ['MOUSE', 'RATON'] },
+        { id: 'serie_teclado', label: 'Teclado Externo', validationKeywords: ['TECLADO', 'KEYBOARD'] },
+        { id: 'serie_cargador', label: 'Cargador', validationKeywords: ['CARGADOR', 'ADAPTADOR', 'AC ADAPTER'] }
     ],
     escritorio: [
-        { id: 'serie_monitor', label: 'Monitor Principal' },
-        { id: 'serie_pc', label: 'CPU / Gabinete' },
-        { id: 'serie_mouse', label: 'Mouse' },
-        { id: 'serie_teclado', label: 'Teclado' },
-        { id: 'serie_ups', label: 'UPS (No-Break)' }
+        { id: 'serie_monitor', label: 'Monitor Principal', validationKeywords: ['MONITOR', 'PANTALLA', 'DISPLAY'] },
+        { id: 'serie_pc', label: 'CPU / Gabinete', validationKeywords: ['CPU', 'GABINETE', 'OPTIPLEX', 'K6', 'Z2', 'DESKTOP', 'COMPUTADORA'] },
+        { id: 'serie_mouse', label: 'Mouse', validationKeywords: ['MOUSE', 'RATON'] },
+        { id: 'serie_teclado', label: 'Teclado', validationKeywords: ['TECLADO', 'KEYBOARD'] },
+        { id: 'serie_ups', label: 'UPS (No-Break)', validationKeywords: ['UPS', 'NO-BREAK', 'NO BREAK', 'REGULADOR'] }
     ],
     multifuncional: [
-        { id: 'completo', label: 'Multifuncional / Impresora', description: 'Vista general' }
+        { id: 'completo', label: 'Multifuncional / Impresora', description: 'Vista general', validationKeywords: ['MULTIFUNCIONAL', 'IMPRESORA', 'SCANNER', 'PRINTER'] }
     ]
 }
 
@@ -44,7 +45,7 @@ const EQUIPMENT_CONFIG: Record<string, ComponentConfig[]> = {
 // Almacena la evidencia individual
 interface ComponentEvidence {
     id: string // ID del componente (ej. 'serie_mouse')
-    status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED'
+    status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED' | 'WRONG_TYPE'
     serial: string // Serial capturado
     validationMsg?: string // Mensaje de validación (ej. "Encontrado: Dell Mouse")
     photoBlob?: Blob
@@ -70,9 +71,61 @@ export default function CapturePage() {
 
     // ESTADOS TEMPORALES (Dentro del Detalle)
     const [tempSerial, setTempSerial] = useState('')
-    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED', msg?: string } | null>(null)
+    const [tempValidation, setTempValidation] = useState<{ status: 'PENDING' | 'CAPTURED' | 'NOT_FOUND_DB' | 'SKIPPED' | 'WRONG_TYPE', msg?: string } | null>(null)
     const [isManual, setIsManual] = useState(false)
     const [scannerActive, setScannerActive] = useState(true)
+
+    // ESTADO DE SESIÓN (PERSISTENCIA)
+    const [currentCaptureId, setCurrentCaptureId] = useState<string | null>(null)
+    const [currentTag, setCurrentTag] = useState<string>('')
+
+    // FASE 1: INICIALIZAR / RECUPERAR SESIÓN
+    useMemo(() => {
+        if (!tipoEquipo) return
+
+        const initSession = async () => {
+            setLoading(true)
+            try {
+                const expediente = localStorage.getItem('user_expediente')
+                if (!expediente) return
+
+                const res = await fetch('/api/capture/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expediente, tipo_equipo: tipoEquipo })
+                })
+
+                if (!res.ok) throw new Error('Error iniciando sesión')
+
+                const data = await res.json()
+                setCurrentCaptureId(data.id)
+                setCurrentTag(data.tag)
+
+                // Si es RESUME, hidratar evidencia
+                if (data.mode === 'RESUME' && data.photos) {
+                    const hydratedEvidence: Record<string, ComponentEvidence> = {}
+                    data.photos.forEach((p: any) => {
+                        hydratedEvidence[p.tipo_foto] = {
+                            id: p.tipo_foto,
+                            status: p.estado_validacion === 'NO_MATCH' ? 'NOT_FOUND_DB' : 'CAPTURED',
+                            serial: p.serial_componente || 'S/N',
+                            photoPreview: p.url_drive, // Ya existe
+                            validationMsg: 'Recuperado de sesión anterior'
+                        }
+                    })
+                    setEvidence(hydratedEvidence)
+                    alert(`¡Sesión Recuperada! TAG: ${data.tag}`)
+                }
+            } catch (e) {
+                console.error(e)
+                setError('Error conectando con servidor de auditoría')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        initSession()
+    }, [tipoEquipo])
 
     // --- LOGICA DE FLUJO ---
 
@@ -99,10 +152,30 @@ export default function CapturePage() {
                 .single()
 
             if (data) {
-                setTempValidation({
-                    status: 'CAPTURED', // Provisional, espera foto
-                    msg: `${data.descripcion} (${data.marca})`
-                })
+                // VALIDACIÓN CRUZADA DE TIPO
+                const currentConfig = EQUIPMENT_CONFIG[tipoEquipo!].find(c => c.id === activeComponentId)
+                const descripcionBD = (data.tipo_equipo || '') + ' ' + (data.descripcion || '')
+                const descripcionUpper = descripcionBD.toUpperCase()
+
+                // Verificar si incluye alguna keyword esperada
+                const esTipoCorrecto = currentConfig?.validationKeywords?.some(keyword =>
+                    descripcionUpper.includes(keyword)
+                )
+
+                // Si no tiene keywords definidas, asumimos correcto (comportamiento fallback)
+                // O si encontró coincidencia
+                if (!currentConfig?.validationKeywords || esTipoCorrecto) {
+                    setTempValidation({
+                        status: 'CAPTURED', // Provisional, espera foto
+                        msg: `${data.descripcion} (${data.marca})`
+                    })
+                } else {
+                    // BLOQUEO: Tipo incorrecto detectado y serial SÍ existe en BD
+                    setTempValidation({
+                        status: 'WRONG_TYPE',
+                        msg: `El número de serie ${serialToValidate} No corresponde al dispositivo que quieres registrar (${currentConfig?.label}), Ya que dicho Número de serie corresponde a un "${data.tipo_equipo}" según la base de datos maestra. Presiona el botón de retornar y elige el correcto.`
+                    })
+                }
             } else {
                 setTempValidation({
                     status: 'NOT_FOUND_DB',
@@ -122,98 +195,91 @@ export default function CapturePage() {
         }
     }
 
-    // 3. Guardar Foto y Cerrar Detalle
-    const saveComponentEvidence = (blob: Blob, preview: string, skip = false) => {
-        if (!activeComponentId) return
+    // 3. GUARDADO INCREMENTAL (Photo-by-Photo)
+    const saveComponentEvidence = async (blob: Blob, preview: string, skip = false) => {
+        if (!activeComponentId || !currentCaptureId) return
 
-        const status = skip ? 'SKIPPED' : (tempValidation?.status || 'CAPTURED')
-
-        const newEvidence: ComponentEvidence = {
-            id: activeComponentId,
-            status: status as any,
-            serial: skip ? 'OMITIDO' : tempSerial,
-            validationMsg: tempValidation?.msg,
-            photoBlob: skip ? undefined : blob,
-            photoPreview: skip ? undefined : preview
-        }
-
-        setEvidence(prev => ({
-            ...prev,
-            [activeComponentId]: newEvidence
-        }))
-
-        // Volver al Dashboard
-        setActiveComponentId(null)
-    }
-
-    // 4. Guardado Final (Subir Todo)
-    const handleFinalSave = async () => {
         setLoading(true)
-        setError('')
         try {
-            const expediente = localStorage.getItem('user_expediente')
-            if (!expediente) throw new Error('No hay sesión de usuario')
+            const expediente = localStorage.getItem('user_expediente')!
+            const status = skip ? 'SKIPPED' : (tempValidation?.status || 'CAPTURED')
+            const serialValue = skip ? 'OMITIDO' : tempSerial
 
-            // A. Crear Header de Captura
-            const { data: capturaFinal, error: insertError } = await supabase
-                .from('capturas')
+            // A. Subir a Storage
+            const formData = new FormData()
+            formData.append('file', blob, `${activeComponentId}.jpg`)
+            formData.append('expediente', expediente)
+            formData.append('tipo', activeComponentId)
+
+            // Usamos la misma API de upload pero ahora el nombre se genera allá.
+            const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
+            if (!uploadRes.ok) throw new Error('Error subiendo imagen')
+            const uploadData = await uploadRes.json()
+
+            // B. Insertar en BD (Vinculado a currentCaptureId)
+            const { error: dbError } = await supabase
+                .from('capturas_fotos')
                 .insert({
-                    expediente_usuario: parseInt(expediente),
-                    tipo_equipo_capturado: tipoEquipo,
-                    observaciones: 'Captura Hub & Spoke',
-                    // Campos legacy que ya no son el foco pero requeridos por constraint si no son null
-                    // Asumimos valores por defecto para este flujo nuevo
-                    etiqueta_legible: true,
-                    equipo_buen_estado: true,
-                    // Serial principal: Tratamos de deducirlo
-                    serial_escaneado: evidence['serie_laptop']?.serial || evidence['serie_pc']?.serial || 'VARIOS',
-                    componentes_omitidos: Object.values(evidence).filter(e => e.status === 'SKIPPED').map(e => e.id)
+                    captura_id: currentCaptureId,
+                    tipo_foto: activeComponentId,
+                    url_drive: uploadData.webViewLink,
+                    drive_file_id: uploadData.fileId,
+                    orden: 1, // Fix: Constraint requires > 0
+                    serial_componente: serialValue,
+                    estado_validacion: status === 'NOT_FOUND_DB' ? 'NO_MATCH' : 'MATCH'
                 })
-                .select()
-                .single()
 
-            if (insertError) throw new Error('Error al crear captura: ' + insertError.message)
+            if (dbError) throw dbError
 
-            // B. Subir Fotos e Insertar Detalles
-            const itemsToUpload = Object.values(evidence).filter(e => e.status !== 'SKIPPED')
-
-            for (const item of itemsToUpload) {
-                if (!item.photoBlob) continue // Should not happen
-
-                // 1. Subir a Storage
-                const formData = new FormData()
-                formData.append('file', item.photoBlob, `${item.id}.jpg`)
-                formData.append('expediente', expediente)
-                formData.append('tipo', item.id)
-
-                const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData })
-                if (!uploadRes.ok) throw new Error(`Error subiendo foto ${item.id}`)
-                const uploadData = await uploadRes.json()
-
-                // 2. Insertar Registro
-                const { error: photoError } = await supabase
-                    .from('capturas_fotos')
-                    .insert({
-                        captura_id: capturaFinal.id,
-                        url_drive: uploadData.webViewLink,
-                        tipo_foto: item.id,
-                        drive_file_id: uploadData.fileId,
-                        orden: 0, // Ya no es tan relevante el orden secuencial
-
-                        // ✨ NUEVOS CAMPOS ✨
-                        serial_componente: item.serial,
-                        estado_validacion: item.status === 'NOT_FOUND_DB' ? 'NO_MATCH' : 'MATCH'
-                    })
-
-                if (photoError) throw new Error(`Error BD Item ${item.id}: ${photoError.message}`)
+            // C. Actualizar Estado Local (UI)
+            const newEvidence: ComponentEvidence = {
+                id: activeComponentId,
+                status: status as any,
+                serial: serialValue,
+                validationMsg: tempValidation?.msg,
+                photoBlob: blob,
+                photoPreview: preview
             }
 
-            alert('¡Auditoría Completada con Éxito!')
-            router.push('/dashboard')
+            setEvidence(prev => ({ ...prev, [activeComponentId]: newEvidence }))
+            setActiveComponentId(null) // Volver al Dashboard
 
-        } catch (err: any) {
-            console.error(err)
-            setError(err.message || 'Error desconocido')
+        } catch (e: any) {
+            console.error(e)
+            alert('Error guardando evidencia: ' + e.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // 4. CIERRE FINAL (Solo cambio de Status)
+    const handleFinalSave = async () => {
+        if (!currentCaptureId) return
+        setLoading(true)
+        try {
+            // Solo actualizamos el status, ya que las fotos se guardaron incrementalmente
+            // 4.1 Identificar Serial Principal para el Header
+            let mainSerial = 'VARIOS'
+            if (tipoEquipo === 'laptop') mainSerial = evidence['serie_laptop']?.serial || 'PENDING'
+            if (tipoEquipo === 'escritorio') mainSerial = evidence['serie_pc']?.serial || 'PENDING'
+            if (tipoEquipo === 'multifuncional') mainSerial = evidence['completo']?.serial || 'PENDING'
+
+            // 4.2 Actualizar Header (Status + Serial Principal)
+            const { error } = await supabase
+                .from('capturas')
+                .update({ 
+                    status: 'COMPLETED',
+                    serial_escaneado: mainSerial
+                })
+                .eq('id', currentCaptureId)
+
+            if (error) throw error
+
+            alert('¡Auditoría Finalizada Correctamente!')
+            router.push('/dashboard')
+        } catch (e: any) {
+            console.error(e)
+            alert('Error finalizando: ' + e.message)
         } finally {
             setLoading(false)
         }
@@ -334,28 +400,56 @@ export default function CapturePage() {
                 ) : (
                     <div className="space-y-6 flex-1 flex flex-col">
                         {/* Resultado Validación */}
-                        <div className={`p-4 rounded-lg border ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
+                        {/* Resultado Validación */}
+                        <div className={`p-4 rounded-lg border ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                            tempValidation.status === 'WRONG_TYPE' ? 'bg-red-500/10 border-red-500/30' :
+                                'bg-green-500/10 border-green-500/30'
+                            }`}>
                             <div className="flex items-center gap-2 mb-1">
-                                {tempValidation.status === 'NOT_FOUND_DB' ? <AlertCircle className="text-yellow-500" size={20} /> : <CheckCircle2 className="text-green-500" size={20} />}
-                                <span className={`font-bold ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' : 'text-green-500'}`}>
-                                    {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' : 'ENCONTRADO'}
+                                {tempValidation.status === 'NOT_FOUND_DB' && <AlertCircle className="text-yellow-500" size={20} />}
+                                {tempValidation.status === 'WRONG_TYPE' && <Ban className="text-red-500" size={20} />}
+                                {tempValidation.status === 'CAPTURED' && <CheckCircle2 className="text-green-500" size={20} />}
+
+                                <span className={`font-bold ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' :
+                                    tempValidation.status === 'WRONG_TYPE' ? 'text-red-500' :
+                                        'text-green-500'
+                                    }`}>
+                                    {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' :
+                                        tempValidation.status === 'WRONG_TYPE' ? 'TIPO INCORRECTO' : 'ENCONTRADO'}
                                 </span>
                             </div>
                             <p className="text-sm opacity-80">{tempValidation.msg}</p>
                             <p className="text-xs font-mono mt-2 bg-black/20 p-1 rounded w-fit">{tempSerial}</p>
+
+                            {/* Botón Retornar Específico para Error de Tipo */}
+                            {tempValidation.status === 'WRONG_TYPE' && (
+                                <Button
+                                    className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white"
+                                    onClick={() => {
+                                        setTempValidation(null)
+                                        setTempSerial('')
+                                        setIsManual(false)
+                                        setScannerActive(true)
+                                    }}
+                                >
+                                    <ArrowLeft className="mr-2" size={16} /> Retornar y corregir
+                                </Button>
+                            )}
                         </div>
 
-                        {/* Foto Evidencia */}
-                        <div className="flex-1">
-                            <CameraCapture
-                                label={`Foto del Serial (${config.label})`}
-                                onCapture={(src) => {
-                                    if (src) {
-                                        fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
-                                    }
-                                }}
-                            />
-                        </div>
+                        {/* Foto Evidencia (Ocultar si hay error de tipo bloqueante) */}
+                        {tempValidation.status !== 'WRONG_TYPE' && (
+                            <div className="flex-1">
+                                <CameraCapture
+                                    label={`Foto del Serial (${config.label})`}
+                                    onCapture={(src) => {
+                                        if (src) {
+                                            fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -379,6 +473,7 @@ export default function CapturePage() {
                 </div>
                 <div className="text-right">
                     <span className="text-2xl font-bold text-primary">{progress}%</span>
+                    <p className="text-[10px] text-muted-foreground font-mono">{currentTag}</p>
                 </div>
             </div>
 

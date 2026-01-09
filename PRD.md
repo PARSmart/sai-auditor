@@ -3,9 +3,9 @@
 
 **Proyecto**: Auditor de Equipos - Alimentación para el Bienestar
 **Regional**: Occidente
-**Fecha**: 6 de Enero de 2026
-**Versión**: 1.0
-**Autor**: Jefe de Informática Regional Occidente
+**Fecha**: 8 de Enero de 2026
+**Versión**: 1.2
+**Autor**: Jefe de Informática Regional Occidente / Antigravity AI
 
 ---
 
@@ -218,7 +218,11 @@ Login → Selección de Equipo → Escaneo QR/Barras → Captura de Fotos → Ob
 - Al detectar código:
   - Sonido/vibración de confirmación
   - Muestra código en pantalla: "✅ Serie detectada: 2N7TR83"
+  - Realiza consulta inmediata a `inventario_maestro`
   - Botón "Confirmar" / "Escanear de nuevo"
+- **Validación Inmediata**:
+  - Si el serial existe en BD: Muestra "✅ Encontrado: [Descripción del Equipo]".
+  - Si no existe: Muestra "⚠️ No registrado en BD (Se permitirá continuar)".
 - **Fallback**:
   - Botón "❌ Etiqueta ilegible / No tiene código"
   - Abre input manual: "Ingresa serie manualmente o déjalo en blanco"
@@ -374,6 +378,23 @@ Foto 1: 📸 "Toma foto de la MULTIFUNCIONAL completa"
      ```
 
 - Botón: "Procesar con IA" → Lanza script de orquestador
+
+---
+
+### RF-09: Validación Cruzada de Tipos (Anti-Error)
+**Prioridad**: CRÍTICA
+**Historia de Usuario**: Como administrador, quiero evitar que los usuarios registren un Mouse escaneando un código de Monitor por error.
+
+**Criterios de Aceptación**:
+- El sistema debe conocer las "Palabras Clave" asociadas a cada tipo de componente (ej. Monitor -> ['MONITOR', 'DISPLAY']).
+- Al validar un serial que **SÍ EXISTE** en `inventario_maestro`:
+  - Compara el campo `tipo_equipo` de la BD contra las keywords del componente seleccionado.
+  - **Coincidencia (Match)**: Permite continuar (Estado: CAPTURED).
+  - **No Coincidencia (Mismatch)**: 
+    - Bloquea el avance.
+    - Muestra alerta roja: "⛔ TIPO INCORRECTO. El serial pertenece a [TIPO_BD] pero estás capturando [TIPO_SELECCIONADO]".
+    - Botón obligatorio: "⬅️ Retornar y corregir".
+- **Lógica Fail-Open**: Si el serial **NO EXISTE** en BD, se ignora la validación de tipo y se permite continuar con advertencia (Estado: NOT_FOUND_DB).
 
 ---
 

@@ -7,10 +7,11 @@ Sistema Web Progresivo (PWA) para la auditoría y validación de inventario de e
 - **Escaneo Inteligente**: Lectura de códigos de barras/QR usando `html5-qrcode`.
 - **Captura de Evidencia**: Flujo guiado para fotografiar equipos.
 - **Sincronización Cloud**: Subida automática a Google Drive organizado por área y empleado.
-- **Validación en Tiempo Real**: Cruce contra base de datos `inventario_maestro` en Supabase.
+- **Validación Cruzada Inteligente**: Previene errores de tipo (ej. Mouse registrado como Monitor) mediante matching de keywords.
+- **Validación en Tiempo Real**: Cruce contra base de datos `inventario_maestro` en Supabase con lógica Fail-Open.
 
 ## 🛠 Tech Stack
-- **Frontend**: Next.js 16 (App Router), Tailwind CSS v4, Lucide React.
+- **Frontend**: Next.js 14 (Pages Router), Tailwind CSS v3, Lucide React.
 - **Cámara/Scanner**: `react-webcam`, `html5-qrcode`.
 - **Backend & Auth**: Supabase (PostgreSQL + RLS).
 - **Storage**: Google Drive API (Service Account).
