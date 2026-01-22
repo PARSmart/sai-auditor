@@ -38,10 +38,20 @@ export async function POST(request: NextRequest) {
         const safeArea = (area_nombre || 'SIN_AREA').trim().replace(/[\/\\]./g, '_');
         const safeEmployee = `${expediente} - ${nombre_completo}`.replace(/[\/\\]./g, '_');
 
+        const tag = formData.get('tag') as string;
+
         // 3. Generar Nombre de Archivo
         const timestamp = Date.now();
-        const cleanArea = safeArea.substring(0, 3).toUpperCase();
-        const fileName = `${cleanArea}-${expediente}-${tipoFoto.toUpperCase()}_${timestamp}.${file.name.split('.').pop()}`;
+        let fileName = '';
+
+        if (tag) {
+            // Nomenclatura Nueva: TAG_TIPO_TIMESTAMP
+            fileName = `${tag}_${tipoFoto.toUpperCase()}_${timestamp}.${file.name.split('.').pop()}`;
+        } else {
+            // Nomenclatura Legacy (Fallback)
+            const cleanArea = safeArea.substring(0, 3).toUpperCase();
+            fileName = `${cleanArea}-${expediente}-${tipoFoto.toUpperCase()}_${timestamp}.${file.name.split('.').pop()}`;
+        }
 
         // Path Completo: 2026/AREA/EMPLEADO/ARCHIVO.jpg
         const fullPath = `${currentYear}/${safeArea}/${safeEmployee}/${fileName}`;

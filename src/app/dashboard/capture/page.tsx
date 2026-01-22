@@ -132,6 +132,14 @@ export default function CapturePage() {
     // 1. Iniciar Captura de un Componente (Click en Tarjeta)
     const openComponent = (compId: string) => {
         const existing = evidence[compId]
+
+        // RULE: Unique Photo Check (Sustitución Controlada)
+        if (existing?.status === 'CAPTURED' && existing.photoPreview) {
+            if (!confirm('⚠️ Ya existe una fotografía para este componente.\n\n¿Deseas sustituirla por una nueva?')) {
+                return // Cancelado por usuario
+            }
+        }
+
         setActiveComponentId(compId)
         // Reset estados temporales o cargar existentes si ya editó
         setTempSerial(existing?.serial || '')
@@ -219,7 +227,7 @@ export default function CapturePage() {
             // B. Insertar en BD (Vinculado a currentCaptureId)
             const { error: dbError } = await supabase
                 .from('capturas_fotos')
-                .insert({
+                .upsert({ // CHANGED: Upsert para permitir sustitución
                     captura_id: currentCaptureId,
                     tipo_foto: activeComponentId,
                     url_drive: uploadData.webViewLink,
@@ -227,7 +235,7 @@ export default function CapturePage() {
                     orden: 1, // Fix: Constraint requires > 0
                     serial_componente: serialValue,
                     estado_validacion: status === 'NOT_FOUND_DB' ? 'NO_MATCH' : 'MATCH'
-                })
+                }, { onConflict: 'captura_id, tipo_foto' }) // Constraint UNIQUE
 
             if (dbError) throw dbError
 
@@ -267,7 +275,7 @@ export default function CapturePage() {
             // 4.2 Actualizar Header (Status + Serial Principal)
             const { error } = await supabase
                 .from('capturas')
-                .update({ 
+                .update({
                     status: 'COMPLETED',
                     serial_escaneado: mainSerial
                 })
@@ -290,39 +298,57 @@ export default function CapturePage() {
     // VISTA 1: SELECTOR TIPO
     if (!tipoEquipo) {
         return (
-            <div className="min-h-screen bg-background p-6 flex flex-col items-center justify-center space-y-8 animate-in fade-in">
-                <div className="text-center space-y-2">
-                    <h1 className="text-3xl font-bold tracking-tight">Nueva Auditoría</h1>
-                    <p className="text-muted-foreground">Selecciona el tipo de equipo a auditar</p>
+            <div className="min-h-screen bg-background p-6 flex flex-col items-center justify-center space-y-12 animate-in fade-in bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background">
+                <div className="text-center space-y-4">
+                    <div className="inline-block p-4 rounded-full bg-slate-900/50 border border-slate-800 mb-2 shadow-xl shadow-indigo-500/10">
+                        <Search className="w-8 h-8 text-indigo-400" />
+                    </div>
+                    <h1 className="text-4xl font-bold tracking-tight text-white">Nueva Auditoría</h1>
+                    <p className="text-slate-400 text-lg">Selecciona el tipo de equipo a auditar</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 w-full max-w-md">
-                    <Button
-                        variant="outline"
-                        className="h-24 text-lg border-primary/20 hover:bg-primary/10 hover:border-primary flex flex-col gap-2"
+                    <button
+                        className="group relative h-28 w-full rounded-2xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 hover:border-indigo-500/50 transition-all duration-300 active:scale-[0.98] overflow-hidden text-left p-6 flex flex-col justify-center gap-1 shadow-lg"
                         onClick={() => setTipoEquipo('laptop')}
                     >
-                        <span>💻 Laptop</span>
-                        <span className="text-xs font-normal text-muted-foreground">Incluye Docking y Periféricos</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="h-24 text-lg border-primary/20 hover:bg-primary/10 hover:border-primary flex flex-col gap-2"
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-2xl mb-1 block group-hover:scale-110 transition-transform origin-left w-fit">💻</span>
+                        <span className="text-xl font-bold text-slate-200 group-hover:text-white transition-colors">Laptop</span>
+                        <span className="text-xs text-slate-500 group-hover:text-indigo-300 transition-colors">Incluye Docking y Periféricos</span>
+                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" size={24} />
+                    </button>
+
+                    <button
+                        className="group relative h-28 w-full rounded-2xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 hover:border-indigo-500/50 transition-all duration-300 active:scale-[0.98] overflow-hidden text-left p-6 flex flex-col justify-center gap-1 shadow-lg"
                         onClick={() => setTipoEquipo('escritorio')}
                     >
-                        <span>🖥️ Escritorio</span>
-                        <span className="text-xs font-normal text-muted-foreground">CPU, Monitor y UPS</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="h-24 text-lg border-primary/20 hover:bg-primary/10 hover:border-primary flex flex-col gap-2"
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-2xl mb-1 block group-hover:scale-110 transition-transform origin-left w-fit">🖥️</span>
+                        <span className="text-xl font-bold text-slate-200 group-hover:text-white transition-colors">Escritorio</span>
+                        <span className="text-xs text-slate-500 group-hover:text-indigo-300 transition-colors">CPU, Monitor y UPS</span>
+                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" size={24} />
+                    </button>
+
+                    <button
+                        className="group relative h-28 w-full rounded-2xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/60 hover:border-indigo-500/50 transition-all duration-300 active:scale-[0.98] overflow-hidden text-left p-6 flex flex-col justify-center gap-1 shadow-lg"
                         onClick={() => setTipoEquipo('multifuncional')}
                     >
-                        <span>🖨️ Multifuncional</span>
-                        <span className="text-xs font-normal text-muted-foreground">Impresoras y Escáneres</span>
-                    </Button>
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-2xl mb-1 block group-hover:scale-110 transition-transform origin-left w-fit">🖨️</span>
+                        <span className="text-xl font-bold text-slate-200 group-hover:text-white transition-colors">Multifuncional</span>
+                        <span className="text-xs text-slate-500 group-hover:text-indigo-300 transition-colors">Impresoras y Escáneres</span>
+                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-700 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" size={24} />
+                    </button>
                 </div>
-                <Button variant="ghost" onClick={() => router.back()}>Cancelar</Button>
+
+                <Button
+                    variant="ghost"
+                    onClick={() => router.back()}
+                    className="text-slate-500 hover:text-white hover:bg-slate-800/50 w-full max-w-xs transition-colors"
+                >
+                    Cancelar
+                </Button>
             </div>
         )
     }
@@ -332,99 +358,134 @@ export default function CapturePage() {
         const config = EQUIPMENT_CONFIG[tipoEquipo].find(c => c.id === activeComponentId)!
 
         return (
-            <div className="min-h-screen bg-background p-4 flex flex-col animate-in slide-in-from-right relative">
+            <div className="min-h-screen bg-background p-4 flex flex-col animate-in slide-in-from-right relative pb-6">
                 {/* Header Detalle */}
-                <div className="flex items-center gap-4 mb-6">
-                    <Button variant="ghost" size="icon" onClick={() => setActiveComponentId(null)}>
+                <div className="flex items-center gap-4 mb-6 pt-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setActiveComponentId(null)}
+                        className="h-10 w-10 rounded-xl border border-slate-800 bg-slate-900/50 hover:bg-slate-800 text-slate-400"
+                    >
                         <ArrowLeft />
                     </Button>
                     <div>
-                        <h2 className="font-bold text-lg">{config.label}</h2>
-                        <p className="text-xs text-muted-foreground">Captura de Serial y Evidencia</p>
+                        <h2 className="font-bold text-xl text-foreground tracking-tight">{config.label}</h2>
+                        <p className="text-xs text-slate-400 font-medium tracking-wide">Captura de Serial y Evidencia</p>
                     </div>
                 </div>
 
                 {/* Paso 1: Serial */}
                 {!tempValidation ? (
-                    <div className="space-y-6 flex-1">
-                        <div className="glass-dark p-4 rounded-xl space-y-4">
-                            <div className="flex justify-center bg-black/40 p-1 rounded-lg w-fit mx-auto">
-                                <button
-                                    onClick={() => { setIsManual(false); setScannerActive(true) }}
-                                    className={`px-4 py-2 text-xs font-medium rounded-md transition-all ${!isManual ? 'bg-primary text-black' : 'text-muted-foreground'}`}
-                                >
-                                    Escanear
-                                </button>
-                                <button
-                                    onClick={() => { setIsManual(true); setScannerActive(false) }}
-                                    className={`px-4 py-2 text-xs font-medium rounded-md transition-all ${isManual ? 'bg-primary text-black' : 'text-muted-foreground'}`}
-                                >
-                                    Manual
-                                </button>
-                            </div>
+                    <div className="space-y-6 flex-1 flex flex-col">
+                        <div className="glass-dark p-1 rounded-2xl flex relative bg-slate-900/40 border-slate-800">
+                            {/* Segmented Control Background Animation could go here but simple is fine for now */}
+                            <button
+                                onClick={() => { setIsManual(false); setScannerActive(true) }}
+                                className={`flex-1 py-3 text-sm font-medium rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${!isManual ? 'bg-slate-800 text-white shadow-lg shadow-black/20' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Camera size={16} /> Escáner
+                            </button>
+                            <button
+                                onClick={() => { setIsManual(true); setScannerActive(false) }}
+                                className={`flex-1 py-3 text-sm font-medium rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${isManual ? 'bg-slate-800 text-white shadow-lg shadow-black/20' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <LayoutGrid size={16} /> Manual
+                            </button>
+                        </div>
 
+                        <div className="flex-1 flex flex-col">
                             {!isManual ? (
-                                <div className="bg-black rounded-lg overflow-visible relative min-h-[300px] flex flex-col">
+                                <div className="bg-black rounded-2xl overflow-hidden relative flex-1 min-h-[400px] border border-slate-800 shadow-2xl">
+                                    <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/80 to-transparent z-10 pointer-events-none" />
+                                    <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent z-10 pointer-events-none" />
+
                                     {scannerActive && <Scanner
                                         onScanSuccess={(txt) => validateSerial(txt)}
                                         onScanError={() => { }}
                                     />}
+
+                                    {/* Overlay Guide */}
+                                    <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
+                                        <div className="w-[80%] h-[200px] border-2 border-white/20 rounded-xl relative">
+                                            <div className="absolute top-0 left-0 w-8 h-8 border-l-2 border-t-2 border-primary rounded-tl-xl" />
+                                            <div className="absolute top-0 right-0 w-8 h-8 border-r-2 border-t-2 border-primary rounded-tr-xl" />
+                                            <div className="absolute bottom-0 left-0 w-8 h-8 border-l-2 border-b-2 border-primary rounded-bl-xl" />
+                                            <div className="absolute bottom-0 right-0 w-8 h-8 border-r-2 border-b-2 border-primary rounded-br-xl" />
+                                            <div className="absolute inset-0 bg-primary/5 animate-pulse" />
+                                        </div>
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="space-y-2">
-                                    <Input
-                                        placeholder="Ingrese Serial..."
-                                        value={tempSerial}
-                                        onChange={(e) => setTempSerial(e.target.value)}
-                                        className="text-lg uppercase"
-                                    />
-                                    <Button className="w-full" onClick={() => validateSerial(tempSerial)} disabled={!tempSerial}>
-                                        Validar
+                                <div className="space-y-6 pt-10 px-2">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-widest ml-1">Número de Serie</label>
+                                        <Input
+                                            placeholder="Escriba el serial..."
+                                            value={tempSerial}
+                                            onChange={(e) => setTempSerial(e.target.value)}
+                                            className="text-xl uppercase h-14 bg-slate-900/50 border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/20 rounded-xl px-4 tracking-wide font-mono"
+                                            autoFocus
+                                        />
+                                    </div>
+
+                                    <Button
+                                        onClick={() => validateSerial(tempSerial)}
+                                        disabled={!tempSerial}
+                                        className="w-full h-14 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 rounded-2xl text-lg font-bold shadow-lg shadow-indigo-500/20"
+                                    >
+                                        Validar Serial
                                     </Button>
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex justify-center">
-                            <Button
-                                variant="ghost"
-                                className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                        <div className="flex justify-center pt-4">
+                            <button
+                                className="group flex items-center gap-2 text-slate-500 hover:text-red-400 transition-colors px-6 py-3 rounded-xl hover:bg-red-500/10"
                                 onClick={() => {
                                     if (confirm('¿Este componente NO existe fisicamente?')) saveComponentEvidence(new Blob(), '', true)
                                 }}
                             >
-                                <Ban className="mr-2 h-4 w-4" /> No existe / No aplica
-                            </Button>
+                                <Ban className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                <span className="font-medium text-sm">Marcar como No Existe</span>
+                            </button>
                         </div>
                     </div>
                 ) : (
                     <div className="space-y-6 flex-1 flex flex-col">
                         {/* Resultado Validación */}
-                        {/* Resultado Validación */}
-                        <div className={`p-4 rounded-lg border ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/10 border-yellow-500/30' :
-                            tempValidation.status === 'WRONG_TYPE' ? 'bg-red-500/10 border-red-500/30' :
-                                'bg-green-500/10 border-green-500/30'
+                        <div className={`p-6 rounded-2xl border backdrop-blur-md relative overflow-hidden ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-950/20 border-yellow-500/30' :
+                            tempValidation.status === 'WRONG_TYPE' ? 'bg-red-950/20 border-red-500/30' :
+                                'bg-emerald-950/20 border-emerald-500/30 shadow-[0_0_30px_-5px_rgba(16,185,129,0.1)]'
                             }`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                {tempValidation.status === 'NOT_FOUND_DB' && <AlertCircle className="text-yellow-500" size={20} />}
-                                {tempValidation.status === 'WRONG_TYPE' && <Ban className="text-red-500" size={20} />}
-                                {tempValidation.status === 'CAPTURED' && <CheckCircle2 className="text-green-500" size={20} />}
 
-                                <span className={`font-bold ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' :
-                                    tempValidation.status === 'WRONG_TYPE' ? 'text-red-500' :
-                                        'text-green-500'
+                            <div className="flex items-center gap-4 mb-3 relative z-10">
+                                <div className={`p-3 rounded-full ${tempValidation.status === 'NOT_FOUND_DB' ? 'bg-yellow-500/20' :
+                                    tempValidation.status === 'WRONG_TYPE' ? 'bg-red-500/20' : 'bg-emerald-500/20'
                                     }`}>
-                                    {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' :
-                                        tempValidation.status === 'WRONG_TYPE' ? 'TIPO INCORRECTO' : 'ENCONTRADO'}
-                                </span>
+                                    {tempValidation.status === 'NOT_FOUND_DB' && <AlertCircle className="text-yellow-500" size={24} />}
+                                    {tempValidation.status === 'WRONG_TYPE' && <Ban className="text-red-500" size={24} />}
+                                    {tempValidation.status === 'CAPTURED' && <CheckCircle2 className="text-emerald-500" size={24} />}
+                                </div>
+
+                                <div>
+                                    <h3 className={`font-bold text-lg tracking-tight ${tempValidation.status === 'NOT_FOUND_DB' ? 'text-yellow-500' :
+                                        tempValidation.status === 'WRONG_TYPE' ? 'text-red-500' : 'text-emerald-500'
+                                        }`}>
+                                        {tempValidation.status === 'NOT_FOUND_DB' ? 'NO REGISTRADO' :
+                                            tempValidation.status === 'WRONG_TYPE' ? 'TIPO INCORRECTO' : 'VALIDACIÓN EXITOSA'}
+                                    </h3>
+                                    <p className="text-xs text-slate-400 font-mono mt-1">{tempSerial}</p>
+                                </div>
                             </div>
-                            <p className="text-sm opacity-80">{tempValidation.msg}</p>
-                            <p className="text-xs font-mono mt-2 bg-black/20 p-1 rounded w-fit">{tempSerial}</p>
+
+                            <p className="text-sm text-slate-300 leading-relaxed relative z-10 pl-[3.25rem]">{tempValidation.msg}</p>
 
                             {/* Botón Retornar Específico para Error de Tipo */}
                             {tempValidation.status === 'WRONG_TYPE' && (
                                 <Button
-                                    className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white"
+                                    className="w-full mt-6 h-12 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-900/20"
                                     onClick={() => {
                                         setTempValidation(null)
                                         setTempSerial('')
@@ -432,22 +493,24 @@ export default function CapturePage() {
                                         setScannerActive(true)
                                     }}
                                 >
-                                    <ArrowLeft className="mr-2" size={16} /> Retornar y corregir
+                                    <ArrowLeft className="mr-2" size={18} /> Retornar y corregir
                                 </Button>
                             )}
                         </div>
 
                         {/* Foto Evidencia (Ocultar si hay error de tipo bloqueante) */}
                         {tempValidation.status !== 'WRONG_TYPE' && (
-                            <div className="flex-1">
-                                <CameraCapture
-                                    label={`Foto del Serial (${config.label})`}
-                                    onCapture={(src) => {
-                                        if (src) {
-                                            fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
-                                        }
-                                    }}
-                                />
+                            <div className="flex-1 flex flex-col justify-end">
+                                <div className="rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative flex-1 min-h-[400px]">
+                                    <CameraCapture
+                                        label={`Foto del Serial (${config.label})`}
+                                        onCapture={(src) => {
+                                            if (src) {
+                                                fetch(src).then(r => r.blob()).then(b => saveComponentEvidence(b, src))
+                                            }
+                                        }}
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -457,6 +520,7 @@ export default function CapturePage() {
     }
 
     // VISTA 3: DASHBOARD (HUB)
+    if (!tipoEquipo) return null
     const config = EQUIPMENT_CONFIG[tipoEquipo]
     const totalItems = config.length
     const capturedCount = Object.keys(evidence).length
@@ -464,81 +528,123 @@ export default function CapturePage() {
     const isComplete = capturedCount === totalItems
 
     return (
-        <div className="min-h-screen bg-background p-4 flex flex-col space-y-6 animate-in fade-in">
+        <div className="min-h-screen bg-background p-4 flex flex-col space-y-6 animate-in fade-in pb-32">
             {/* Header Dashboard */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pt-4">
                 <div>
-                    <h1 className="text-xl font-bold">Auditoría {tipoEquipo.charAt(0).toUpperCase() + tipoEquipo.slice(1)}</h1>
-                    <p className="text-xs text-muted-foreground">{capturedCount} de {totalItems} componentes procesados</p>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Auditoría {tipoEquipo.charAt(0).toUpperCase() + tipoEquipo.slice(1)}</h1>
+                    <p className="text-sm text-slate-400 mt-1">{capturedCount} de {totalItems} completados</p>
                 </div>
                 <div className="text-right">
-                    <span className="text-2xl font-bold text-primary">{progress}%</span>
-                    <p className="text-[10px] text-muted-foreground font-mono">{currentTag}</p>
+                    <span className="text-3xl font-bold text-primary">{progress}%</span>
+                    <p className="text-[10px] text-slate-500 font-mono tracking-wider">{currentTag}</p>
                 </div>
             </div>
 
-            {/* Grid */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Premium List (Vertical Stack) */}
+            <div className="space-y-3">
                 {config.map(item => {
                     const itemData = evidence[item.id]
-                    let statusColor = 'border-white/10 bg-card'
-                    let icon = <div className="w-3 h-3 rounded-full bg-white/20" /> // Pendiente
+                    const status = itemData?.status
 
-                    if (itemData) {
-                        if (itemData.status === 'CAPTURED') {
-                            statusColor = 'border-green-500/50 bg-green-500/10'
-                            icon = <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        } else if (itemData.status === 'NOT_FOUND_DB') {
-                            statusColor = 'border-yellow-500/50 bg-yellow-500/10'
-                            icon = <AlertCircle className="w-4 h-4 text-yellow-500" />
-                        } else if (itemData.status === 'SKIPPED') {
-                            statusColor = 'border-red-500/50 bg-red-500/10 opacity-70'
-                            icon = <Ban className="w-4 h-4 text-red-500" />
-                        }
+                    // Estado Visual
+                    let cardClasses = 'bg-slate-900/40 border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900/60'
+                    let textClasses = 'text-slate-200'
+                    let iconBox = 'bg-slate-800 text-slate-400'
+                    let Icon = AlertCircle
+                    let statusText = 'PENDIENTE'
+
+                    if (status === 'CAPTURED') {
+                        cardClasses = 'bg-emerald-950/20 border-emerald-500/30 shadow-[0_0_15px_-3px_rgba(16,185,129,0.1)]'
+                        textClasses = 'text-emerald-100'
+                        iconBox = 'bg-emerald-500/20 text-emerald-400'
+                        Icon = CheckCircle2
+                        statusText = 'CAPTURADO'
+                    } else if (status === 'NOT_FOUND_DB') {
+                        cardClasses = 'bg-yellow-950/20 border-yellow-500/30'
+                        textClasses = 'text-yellow-100'
+                        iconBox = 'bg-yellow-500/20 text-yellow-400'
+                        statusText = 'NO ENCONTRADO EN BD'
+                    } else if (status === 'SKIPPED') {
+                        cardClasses = 'bg-red-950/10 border-red-500/20 opacity-70'
+                        textClasses = 'text-red-200'
+                        iconBox = 'bg-red-500/10 text-red-400'
+                        Icon = Ban
+                        statusText = 'NO APLICA / NO EXISTE'
                     }
 
                     return (
-                        <button
+                        <div
                             key={item.id}
                             onClick={() => openComponent(item.id)}
-                            className={`relative p-4 rounded-xl border flex flex-col items-start gap-2 transition-all active:scale-95 ${statusColor}`}
+                            className={`
+                                group relative overflow-hidden rounded-xl border p-4 transition-all duration-300 cursor-pointer active:scale-[0.98]
+                                ${cardClasses}
+                            `}
                         >
-                            <div className="flex justify-between w-full">
-                                <span className="font-bold text-sm text-left leading-tight">{item.label}</span>
-                                {icon}
+                            {/* Hover Glow */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                            <div className="relative flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-xl transition-colors ${iconBox}`}>
+                                        <Icon size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className={`font-semibold ${textClasses}`}>
+                                            {item.label}
+                                        </h3>
+                                        {itemData ? (
+                                            <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                                {status === 'SKIPPED' ? 'Omitido' : status === 'NOT_FOUND_DB' ? `! S/N: ${itemData.serial}` : itemData.serial}
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-slate-500 font-medium tracking-wide uppercase">{statusText}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <ChevronRight className={`transition-transform duration-300 ${status === 'CAPTURED' ? 'text-emerald-500/50' : 'text-slate-600 group-hover:translate-x-1 group-hover:text-primary'}`} />
                             </div>
-                            {itemData ? (
-                                <p className="text-[10px] opacity-70 truncate w-full text-left">
-                                    {itemData.status === 'SKIPPED' ? 'No existe' : `S/N: ${itemData.serial}`}
-                                </p>
-                            ) : (
-                                <p className="text-[10px] text-muted-foreground">Toque para capturar</p>
-                            )}
-                        </button>
+                        </div>
                     )
                 })}
             </div>
 
-            {/* Footer Actions */}
-            <div className="mt-auto pt-6 space-y-3">
+            {/* Footer Actions (Floating) */}
+            <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent z-40">
                 {error && (
-                    <div className="bg-red-500/10 text-red-500 p-3 rounded text-sm flex gap-2 items-center">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm flex gap-2 items-center animate-in slide-in-from-bottom-2">
                         <AlertCircle size={16} /> {error}
                     </div>
                 )}
 
-                <Button
-                    className={`w-full h-14 text-lg ${isComplete ? 'bg-primary text-black hover:bg-primary/90' : 'bg-muted text-muted-foreground'}`}
-                    disabled={!isComplete || loading}
-                    onClick={handleFinalSave}
-                >
-                    {loading ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
-                    Finalizar Auditoría
-                </Button>
+                <div className="flex gap-3">
+                    <Button
+                        variant="outline"
+                        onClick={() => setTipoEquipo(null)}
+                        className="h-14 px-6 rounded-2xl border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-slate-300 font-medium shrink-0 flex gap-2 items-center transition-colors"
+                    >
+                        <ArrowLeft size={20} />
+                        <span className="hidden sm:inline">Regresar</span>
+                    </Button>
 
-                <Button variant="ghost" className="w-full" onClick={() => setTipoEquipo(null)}>
-                    Cambiar Tipo de Equipo
-                </Button>
+                    <Button
+                        onClick={handleFinalSave}
+                        className={`
+                            flex-1 h-14 rounded-2xl text-lg font-bold shadow-lg shadow-indigo-500/20
+                            transition-all duration-300
+                            ${isComplete
+                                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white hover:scale-[1.02] active:scale-[0.98]'
+                                : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            }
+                        `}
+                        disabled={!isComplete || loading}
+                    >
+                        {loading ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                        Finalizar Auditoría
+                    </Button>
+                </div>
             </div>
         </div>
     )

@@ -69,14 +69,14 @@ export async function POST(request: NextRequest) {
                     .single();
 
                 if (existingSession && existingSession.status === 'IN_PROGRESS') {
-                     return NextResponse.json({
+                    return NextResponse.json({
                         mode: 'RESUME',
                         id: existingSession.id,
                         tag: existingSession.tag_generado,
                         photos: existingSession.capturas_fotos
                     });
                 }
-                
+
                 return NextResponse.json({
                     error: 'Ya existe una auditoría completada para este equipo en este ciclo (' + year + ').'
                 }, { status: 409 });
